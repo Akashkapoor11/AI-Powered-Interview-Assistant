@@ -1,0 +1,52 @@
+/* --- Vibrant background gradient --- */
+.app-gradient {
+  background: radial-gradient(1200px 800px at 10% -10%, #1f2937 0%, transparent 60%),
+              radial-gradient(900px 700px at 90% 0%, rgba(124, 58, 237, .25) 0%, transparent 60%),
+              linear-gradient(135deg, #0b1220 0%, #0f172a 50%, #0b1220 100%);
+  background-attachment: fixed;
+}
+
+/* Glass container */
+.glass-surface {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  padding: 12px;
+  box-shadow: 0 10px 30px rgba(2,6,23,0.45), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+/* little animated logo dot */
+.logo-pulse {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #a78bfa, #7c3aed);
+  box-shadow: 0 0 18px #7c3aedcc;
+  animation: ping 1.8s ease-out infinite;
+}
+@keyframes ping {
+  0% { transform: scale(1); opacity: 1; }
+  80% { transform: scale(2.1); opacity: 0; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+
+/* nicer Ant inputs on dark */
+.ant-input, .ant-input-affix-wrapper, .ant-select-selector, .ant-input-textarea {
+  background: rgba(255,255,255,0.06) !important;
+  border-color: rgba(255,255,255,0.12) !important;
+}
+
+/* primary button glow */
+.ant-btn-primary {
+  box-shadow: 0 8px 18px rgba(124, 58, 237, 0.35);
+}
+.ant-btn-primary:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  transition: all .2s ease;
+}
+
+/* subtle separators */
+.ant-card {
+  border: 1px solid rgba(255,255,255,0.08) !important;
+}
