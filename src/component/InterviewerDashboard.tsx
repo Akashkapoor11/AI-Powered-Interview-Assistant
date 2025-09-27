@@ -28,8 +28,6 @@ import {
 } from "@ant-design/icons";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../store/store";
-
-// ⚠️ Adjust these imports to match your slice names if different
 import { addCandidate, removeCandidate } from "../store/slices/candidatesSlice";
 
 const { Title, Text } = Typography;
@@ -66,6 +64,10 @@ export default function InterviewerDashboard() {
   const session = useSelector((s: RootState) => s.session);
   const { profile, finalScore = 0, summary, answers = [] } = session as any;
 
+  // Live score before DONE
+  const liveScore = (answers as AnswerRow[]).reduce((s, a) => s + (a?.score || 0), 0);
+  const shownScore = finalScore > 0 ? finalScore : liveScore;
+
   // Persisted candidates list
   const candidates = useSelector((s: RootState) => (s as any).candidates?.list || []) as Candidate[];
 
@@ -82,7 +84,7 @@ export default function InterviewerDashboard() {
       name: profile.name,
       email: profile.email,
       phone: profile.phone,
-      finalScore,
+      finalScore: shownScore,
       summary: summary || "—",
       answers: answers as AnswerRow[],
       createdAt: Date.now(),
@@ -114,41 +116,50 @@ export default function InterviewerDashboard() {
     {
       title: "Name",
       dataIndex: "name",
+      width: 180,
       sorter: (a: Candidate, b: Candidate) => a.name.localeCompare(b.name),
       render: (v: string) => (
         <Space>
           <UserOutlined />
-          <Text strong>{v}</Text>
+          <Text strong ellipsis={{ tooltip: v }} style={{ maxWidth: 120, display: "inline-block" }}>
+            {v}
+          </Text>
         </Space>
       ),
     },
     {
       title: "Email",
       dataIndex: "email",
+      width: 300, // prevent overlap
       sorter: (a: Candidate, b: Candidate) => a.email.localeCompare(b.email),
       render: (v: string) => (
         <Space>
           <MailOutlined />
-          <a href={`mailto:${v}`}>{v}</a>
+          <a href={`mailto:${v}`} style={{ maxWidth: 240, display: "inline-block" }}>
+            <Text ellipsis={{ tooltip: v }}>{v}</Text>
+          </a>
         </Space>
       ),
     },
     {
       title: "Phone",
       dataIndex: "phone",
+      width: 180, // prevent overlap
       sorter: (a: Candidate, b: Candidate) => a.phone.localeCompare(b.phone),
       render: (v: string) => (
         <Space>
           <PhoneOutlined />
-          <a href={`tel:${v}`}>{v}</a>
+          <a href={`tel:${v}`} style={{ maxWidth: 120, display: "inline-block" }}>
+            <Text ellipsis={{ tooltip: v }}>{v}</Text>
+          </a>
         </Space>
       ),
     },
     {
       title: "Final Score",
       dataIndex: "finalScore",
-      sorter: (a: Candidate, b: Candidate) => a.finalScore - b.finalScore,
       width: 140,
+      sorter: (a: Candidate, b: Candidate) => a.finalScore - b.finalScore,
       render: (v: number) => (
         <Space>
           <Progress
@@ -222,8 +233,7 @@ export default function InterviewerDashboard() {
       style={{
         borderRadius: 16,
         marginBottom: 16,
-        background:
-          "linear-gradient(135deg, #fef3c7, #e0f2fe 40%, #f5f3ff 80%)",
+        background: "linear-gradient(135deg, #fef3c7, #e0f2fe 40%, #f5f3ff 80%)",
       }}
       bodyStyle={{ padding: 20 }}
     >
@@ -231,17 +241,17 @@ export default function InterviewerDashboard() {
         <Space align="start">
           <Progress
             type="dashboard"
-            percent={Math.min(100, Math.round(((finalScore || 0) / 60) * 100))}
-            format={() => finalScore || 0}
+            percent={Math.min(100, Math.round(((shownScore || 0) / 60) * 100))}
+            format={() => shownScore || 0}
             width={108}
             strokeColor={{ "0%": "#34d399", "100%": "#2563eb" }}
           />
           <div>
-            <Title level={5} style={{ margin: 0 }}>
+            <Title level={5} style={{ margin: 0, color: "rgba(15,23,42,0.95)" }}>
               Current Candidate
             </Title>
-            <Text type="secondary">
-              Final Score: <Text strong>{finalScore || 0}</Text> — Click “Save to Dashboard”.
+            <Text type="secondary" style={{ color: "rgba(15,23,42,0.75)" }}>
+              Final Score: <Text strong style={{ color: "rgba(15,23,42,0.95)" }}>{shownScore || 0}</Text> — Click “Save to Dashboard”.
             </Text>
             <div style={{ marginTop: 8 }}>
               <Space wrap>
@@ -329,11 +339,13 @@ export default function InterviewerDashboard() {
               onClick: () => setOpenId(record.id),
               style: { cursor: "pointer" },
             })}
+            /** keep columns from squeezing & make ellipsis work */
+            tableLayout="fixed"
+            scroll={{ x: 1100 }}
           />
         )}
       </Card>
 
-      {/* Detail Drawer */}
       <Drawer
         width={720}
         title={
@@ -393,7 +405,12 @@ export default function InterviewerDashboard() {
                   : verdict === "incorrect"
                   ? "red"
                   : "gold";
-              const max = row.q.difficulty === "EASY" ? 5 : row.q.difficulty === "MEDIUM" ? 10 : 15;
+              const max =
+                row.q.difficulty === "EASY"
+                  ? 5
+                  : row.q.difficulty === "MEDIUM"
+                  ? 10
+                  : 15;
 
               return (
                 <Card

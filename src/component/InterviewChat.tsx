@@ -27,11 +27,7 @@ import {
   extractTextFromImage,
   extractFields,
 } from "../utils/resume";
-import {
-  generateQuestions,
-  scoreAnswer,
-  summarizeCandidate,
-} from "../utils/ai";
+import { generateQuestions, scoreAnswer, summarizeCandidate } from "../utils/ai";
 import LoginModal from "./LoginModal";
 
 const { Title, Text } = Typography;
@@ -52,19 +48,11 @@ function localFallbackScore(
     (corpus.includes("typescript") ? 1 : 0);
 
   const max =
-    question.difficulty === "EASY"
-      ? 5
-      : question.difficulty === "MEDIUM"
-      ? 10
-      : 15;
+    question.difficulty === "EASY" ? 5 : question.difficulty === "MEDIUM" ? 10 : 15;
 
   const points = Math.min(max, Math.round((hits / 4) * max));
   const verdict =
-    points >= Math.ceil(max * 0.6)
-      ? "correct"
-      : points > 0
-      ? "partial"
-      : "incorrect";
+    points >= Math.ceil(max * 0.6) ? "correct" : points > 0 ? "partial" : "incorrect";
   const feedback =
     points > 0
       ? "Fallback scoring used. Some relevant terms detected."
@@ -77,6 +65,9 @@ export default function InterviewChat() {
   const { profile, authed, step, idx, questions, answers } = useSelector(
     (s: RootState) => s.session
   );
+
+  // Derived flag so chips only render when truly logged in
+  const isLoggedIn = !!authed;
 
   // --------- Welcome back (once per restored session) ----------
   useEffect(() => {
@@ -109,9 +100,11 @@ export default function InterviewChat() {
           dispatch(setQuestions(generateQuestions(profile)));
         } else {
           dispatch(logout());
-          message.info(
-            "Session reset due to stale data. Please upload your resume again."
-          );
+          try {
+            localStorage.removeItem("persist:root");
+            localStorage.removeItem("welcomeSeen");
+          } catch {}
+          message.info("Session reset due to stale data. Please upload your resume again.");
         }
       }
     }
@@ -119,11 +112,7 @@ export default function InterviewChat() {
 
   // --------- Upload / login / gating ----------
   const [loginOpen, setLoginOpen] = useState(false);
-  const [gateValues, setGateValues] = useState({
-    name: "",
-    email: "",
-    phone: "",
-  });
+  const [gateValues, setGateValues] = useState({ name: "", email: "", phone: "" });
 
   async function handleUpload(file: File) {
     try {
@@ -248,9 +237,7 @@ export default function InterviewChat() {
           feedback: fb.feedback,
         })
       );
-      message.warning(
-        `Using offline scoring — ${fb.verdict.toUpperCase()}: ${fb.feedback}`
-      );
+      message.warning(`Using offline scoring — ${fb.verdict.toUpperCase()}: ${fb.feedback}`);
     }
   }
 
@@ -275,10 +262,14 @@ export default function InterviewChat() {
       okType: "danger",
       onOk: () => {
         dispatch(logout());
+        // Hard clear any persisted values / welcome modal memory
         try {
           localStorage.removeItem("persist:root");
           localStorage.removeItem("welcomeSeen");
         } catch {}
+        // Also clear local UI state so chips don’t keep old values
+        setGateValues({ name: "", email: "", phone: "" });
+        setLoginOpen(false);
         message.success("Logged out. You can upload a new resume and log in.");
       },
     });
@@ -297,6 +288,8 @@ export default function InterviewChat() {
           localStorage.removeItem("persist:root");
           localStorage.removeItem("welcomeSeen");
         } catch {}
+        setGateValues({ name: "", email: "", phone: "" });
+        setLoginOpen(false);
         message.success("Session reset. Start again by uploading a resume.");
       },
     });
@@ -311,9 +304,7 @@ export default function InterviewChat() {
           placeholder="Full Name"
           style={{ marginBottom: 8 }}
           value={gateValues.name}
-          onChange={(e) =>
-            setGateValues((v) => ({ ...v, name: e.target.value }))
-          }
+          onChange={(e) => setGateValues((v) => ({ ...v, name: e.target.value }))}
         />
       )}
       {!profile?.email && (
@@ -321,9 +312,7 @@ export default function InterviewChat() {
           placeholder="Email"
           style={{ marginBottom: 8 }}
           value={gateValues.email}
-          onChange={(e) =>
-            setGateValues((v) => ({ ...v, email: e.target.value }))
-          }
+          onChange={(e) => setGateValues((v) => ({ ...v, email: e.target.value }))}
         />
       )}
       {!profile?.phone && (
@@ -331,9 +320,7 @@ export default function InterviewChat() {
           placeholder="Phone"
           style={{ marginBottom: 8 }}
           value={gateValues.phone}
-          onChange={(e) =>
-            setGateValues((v) => ({ ...v, phone: e.target.value }))
-          }
+          onChange={(e) => setGateValues((v) => ({ ...v, phone: e.target.value }))}
         />
       )}
       <Space>
@@ -353,8 +340,8 @@ export default function InterviewChat() {
     <Card style={{ marginTop: 16 }}>
       <Space direction="vertical" style={{ width: "100%" }}>
         <Text strong>
-          Q{Math.min(idx + 1, questions.length)}/{questions.length} (
-          {current?.difficulty}) — Time left: {Math.max(0, timeLeft)}s
+          Q{Math.min(idx + 1, questions.length)}/{questions.length} ({current?.difficulty}) — Time left:{" "}
+          {Math.max(0, timeLeft)}s
         </Text>
         <Title level={5} style={{ marginTop: 0 }}>
           {current?.text}
@@ -395,9 +382,7 @@ export default function InterviewChat() {
   const doneView = (
     <Card style={{ marginTop: 16 }}>
       <Title level={5}>Interview complete 🎉</Title>
-      <Text>
-        Switch to the Interviewer tab to see your final score and summary.
-      </Text>
+      <Text>Switch to the Interviewer tab to see your final score and summary.</Text>
     </Card>
   );
 
@@ -406,96 +391,73 @@ export default function InterviewChat() {
       <Card
         style={{
           borderRadius: 16,
-          padding: 16,
           background:
-            "linear-gradient(135deg, #f0f9ff, #e0f2fe, #f0f9ff, #fdf4ff)",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
+            "radial-gradient(1200px 200px at 0 -20%, rgba(59,130,246,.25), rgba(99,102,241,.2) 60%, transparent), linear-gradient(180deg, rgba(255,255,255,.88), rgba(255,255,255,.82))",
+          boxShadow: "0 8px 30px rgba(0,0,0,.08)",
         }}
+        bodyStyle={{ padding: 18 }}
       >
-        <Space wrap size="middle">
-          <input
-            type="file"
-            accept=".pdf,.docx,.jpg,.jpeg,.png"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleUpload(f);
-              e.currentTarget.value = ""; // allow re-upload same file
-            }}
-            style={{ display: "none" }}
-            id="resume-input"
-          />
-
-          <Button
-            type="primary"
-            size="large"
-            shape="round"
-            onClick={() => document.getElementById("resume-input")?.click()}
-            style={{
-              boxShadow: "0 6px 16px rgba(37, 99, 235, 0.35)",
-              fontWeight: 600,
-            }}
-          >
-            Upload Resume (PDF/DOCX/JPG/PNG)
-          </Button>
-
-          {!authed ? (
+        <Space wrap align="center" style={{ width: "100%", justifyContent: "space-between" }}>
+          <Space wrap>
+            <input
+              type="file"
+              accept=".pdf,.docx,.jpg,.jpeg,.png"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleUpload(f);
+                e.currentTarget.value = ""; // allow re-upload same file
+              }}
+              style={{ display: "none" }}
+              id="resume-input"
+            />
             <Button
               type="primary"
               size="large"
-              shape="round"
-              onClick={() => setLoginOpen(true)}
+              onClick={() => document.getElementById("resume-input")?.click()}
               style={{
-                background: "#16a34a",
-                borderColor: "#16a34a",
+                background:
+                  "linear-gradient(135deg, #6366f1 0%, #3b82f6 60%, #06b6d4 100%)",
+                border: "none",
                 fontWeight: 600,
-                boxShadow: "0 6px 16px rgba(22,163,74,.35)",
+                boxShadow: "0 8px 18px rgba(59,130,246,.35)",
               }}
             >
-              Login
+              Upload Resume (PDF/DOCX/JPG/PNG)
             </Button>
-          ) : (
-            <Space size="small" wrap>
+
+            {!isLoggedIn ? (
               <Button
                 type="primary"
-                danger
                 size="large"
-                shape="round"
-                onClick={handleLogout}
-                style={{ fontWeight: 600 }}
-              >
-                Logout
-              </Button>
-              <Button
-                size="large"
-                shape="round"
-                onClick={handleHardReset}
+                onClick={() => setLoginOpen(true)}
                 style={{
-                  background: "#ffffff",
-                  borderColor: "#d0d5dd",
-                  color: "#111827",
+                  background: "linear-gradient(135deg, #22c55e, #16a34a)",
+                  border: "none",
                   fontWeight: 600,
-                  boxShadow: "0 4px 12px rgba(0,0,0,.08)",
+                  boxShadow: "0 10px 20px rgba(34,197,94,.35)",
                 }}
               >
-                Reset Session
+                Login
               </Button>
+            ) : (
+              <Space>
+                <Button danger onClick={handleLogout}>
+                  Logout
+                </Button>
+                <Button onClick={handleHardReset}>Reset Session</Button>
+              </Space>
+            )}
+          </Space>
+
+          {/* Chips only while logged in */}
+          {isLoggedIn && (
+            <Space wrap>
+              {profile?.name && <Tag color="green">Name: {profile.name}</Tag>}
+              {profile?.email && <Tag color="cyan">Email: {profile.email}</Tag>}
+              {profile?.phone && <Tag color="blue">Phone: {profile.phone}</Tag>}
             </Space>
           )}
         </Space>
-
-        <div
-          style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}
-        >
-          <Tag color={profile?.name ? "success" : "warning"}>
-            <b>Name:</b>&nbsp;{profile?.name || "missing"}
-          </Tag>
-          <Tag color={profile?.email ? "processing" : "warning"}>
-            <b>Email:</b>&nbsp;{profile?.email || "missing"}
-          </Tag>
-          <Tag color={profile?.phone ? "blue" : "warning"}>
-            <b>Phone:</b>&nbsp;{profile?.phone || "missing"}
-          </Tag>
-        </div>
       </Card>
 
       {step === "GATE" && gateView}

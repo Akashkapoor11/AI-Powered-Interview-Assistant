@@ -1,31 +1,59 @@
+// src/utils/resume.ts
+/// <reference types="vite/client" />
+
 import * as pdfjs from "pdfjs-dist";
 // USE LOCAL PDF WORKER (from public/pdf.worker.min.js)
 (pdfjs as any).GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
 
-// @ts-ignore
+// @ts-ignore (mammoth has no default ESM types)
 import mammoth from "mammoth";
-import { createWorker, PSM } from "tesseract.js";
 
-/* -------------------- Tesseract worker (singleton) -------------------- */
+// Tesseract.js (guard types to avoid build errors across versions)
+import Tesseract, { createWorker } from "tesseract.js";
 
-let _workerPromise: Promise<ReturnType<typeof createWorker>> | null = null;
+/* -------------------- Tesseract worker (singleton, guarded) -------------------- */
+/**
+ * Different tesseract.js versions export different Worker types & enums.
+ * We keep it typed as `any` to avoid TS issues on Vercel builds.
+ */
+let _workerPromise: Promise<any> | null = null;
 
 async function getWorker() {
-  if (!_workerPromise) {
-    _workerPromise = (async () => {
-      const worker = await createWorker({
+  if (_workerPromise) return _workerPromise;
+
+  _workerPromise = (async () => {
+    try {
+      const worker: any = await createWorker({
         // Use local assets from /public/tesseract
+        // (Make sure you actually have these files in your deployed app)
         workerPath: "/tesseract/worker.min.js",
         corePath: "/tesseract/tesseract-core.wasm",
         langPath: "/tesseract",
-      });
-      await worker.loadLanguage("eng");
-      await worker.initialize("eng");
-      await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_BLOCK });
+      } as any);
+
+      // Some versions require explicit load -> initialize
+      if (worker.loadLanguage) {
+        await worker.loadLanguage("eng");
+      }
+      if (worker.initialize) {
+        await worker.initialize("eng");
+      }
+
+      // PSM enums differ across versions; the string value is accepted universally.
+      // 6 = PSM_SINGLE_BLOCK (common value), but if setParameters fails we ignore.
+      try {
+        await worker.setParameters?.({ tessedit_pageseg_mode: "6" });
+      } catch {
+        // ignore if not supported
+      }
       return worker;
-    })();
-  }
-  return _workerPromise!;
+    } catch (err) {
+      console.warn("[OCR] Worker init failed, will use direct recognize()", err);
+      return null; // signal to fallback on direct Tesseract.recognize
+    }
+  })();
+
+  return _workerPromise;
 }
 
 /* --------------------------- Public functions ------------------------- */
@@ -38,7 +66,7 @@ export async function extractTextFromPdf(
     const buf = await file.arrayBuffer();
     const pdf = await (pdfjs as any).getDocument({ data: buf }).promise;
 
-    // 1) Try selectable text
+    // 1) Try selectable text first (fastest, best quality)
     let text = "";
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
@@ -48,7 +76,7 @@ export async function extractTextFromPdf(
     }
     if (text.trim()) return normalize(text);
 
-    // 2) OCR fallback
+    // 2) OCR fallback (render pages to canvas → OCR)
     return await ocrPdfBuffer(buf, pdf.numPages, onOcrProgress);
   } catch (e) {
     console.error("PDF parse error:", e);
@@ -81,20 +109,30 @@ export async function extractTextFromImage(
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     preprocessCanvas(ctx, canvas.width, canvas.height);
 
+    // Try the worker first
     const worker = await getWorker();
-    const result = await worker.recognize(canvas, {
+    if (worker) {
+      const result = await worker.recognize(canvas, {
+        logger: (m: any) => {
+          if (m.status === "recognizing text" && typeof m.progress === "number") {
+            onOcrProgress?.(Math.min(99, Math.floor(m.progress * 100)), "OCR image");
+          }
+        },
+      } as any);
+      onOcrProgress?.(100, "OCR complete");
+      return normalize(result.data?.text || "");
+    }
+
+    // Fallback: direct recognize (no worker)
+    const { data } = await Tesseract.recognize(canvas, "eng", {
       logger: (m: any) => {
         if (m.status === "recognizing text" && typeof m.progress === "number") {
-          onOcrProgress?.(
-            Math.min(99, Math.floor(m.progress * 100)),
-            "OCR image"
-          );
+          onOcrProgress?.(Math.min(99, Math.floor(m.progress * 100)), "OCR image");
         }
       },
     } as any);
-
     onOcrProgress?.(100, "OCR complete");
-    return normalize(result.data.text || "");
+    return normalize(data?.text || "");
   } catch (e) {
     console.error("IMAGE OCR error:", e);
     return "";
@@ -270,19 +308,29 @@ async function ocrPdfBuffer(
     const base = ((i - 1) / pageCount) * 100;
     const span = 100 / pageCount;
 
-    const result = await worker.recognize(canvas, {
-      logger: (m: any) => {
-        if (m.status === "recognizing text" && typeof m.progress === "number") {
-          const pct = base + m.progress * span;
-          onOcrProgress?.(
-            Math.min(99, Math.floor(pct)),
-            `OCR page ${i}/${pageCount}`
-          );
-        }
-      },
-    } as any);
+    if (worker) {
+      const result = await worker.recognize(canvas, {
+        logger: (m: any) => {
+          if (m.status === "recognizing text" && typeof m.progress === "number") {
+            const pct = base + m.progress * span;
+            onOcrProgress?.(Math.min(99, Math.floor(pct)), `OCR page ${i}/${pageCount}`);
+          }
+        },
+      } as any);
+      fullText += (result.data?.text || "") + "\n";
+    } else {
+      // Fallback: direct recognize
+      const { data } = await Tesseract.recognize(canvas, "eng", {
+        logger: (m: any) => {
+          if (m.status === "recognizing text" && typeof m.progress === "number") {
+            const pct = base + m.progress * span;
+            onOcrProgress?.(Math.min(99, Math.floor(pct)), `OCR page ${i}/${pageCount}`);
+          }
+        },
+      } as any);
+      fullText += (data?.text || "") + "\n";
+    }
 
-    fullText += (result.data.text || "") + "\n";
     onOcrProgress?.(
       Math.min(99, Math.floor(base + span)),
       `OCR page ${i}/${pageCount} done`
