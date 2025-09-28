@@ -29,7 +29,7 @@ Built with:
 
 
 ## Vedio 
-<!-- Failed to upload "AI Interview Assistant - Google Chrome 2025-09-28 15-53-09.mp4" -->
+https://www.youtube.com/watch?v=wCw1FnhwSeY
 
 ## Deployment Link
 https://ai-powered-interview-assistant-czj7-5cpqsghpl.vercel.app/
