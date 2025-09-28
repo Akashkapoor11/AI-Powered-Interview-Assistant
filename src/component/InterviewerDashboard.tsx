@@ -1,4 +1,3 @@
-// src/component/InterviewerDashboard.tsx
 import React, { useMemo, useState } from "react";
 import {
   Button,
@@ -47,7 +46,7 @@ type Candidate = {
   email: string;
   phone: string;
   finalScore: number;
-  summary?: string;
+  summary: string;          // make this required to satisfy slice types on Vercel
   createdAt: number;
   answers?: AnswerRow[];
 };
@@ -84,11 +83,12 @@ export default function InterviewerDashboard() {
       name: profile.name,
       email: profile.email,
       phone: profile.phone,
-      finalScore: shownScore,
-      summary: summary || "—",
+      finalScore: shownScore,           // save the visible score
+      summary: summary || "—",          // always a string
       answers: answers as AnswerRow[],
       createdAt: Date.now(),
     };
+    // if your slice enforces a stricter type, you can cast: dispatch(addCandidate(payload as any));
     dispatch(addCandidate(payload));
     message.success("Candidate saved to dashboard.");
   };
@@ -130,7 +130,7 @@ export default function InterviewerDashboard() {
     {
       title: "Email",
       dataIndex: "email",
-      width: 300, // prevent overlap
+      width: 300,
       sorter: (a: Candidate, b: Candidate) => a.email.localeCompare(b.email),
       render: (v: string) => (
         <Space>
@@ -144,7 +144,7 @@ export default function InterviewerDashboard() {
     {
       title: "Phone",
       dataIndex: "phone",
-      width: 180, // prevent overlap
+      width: 180,
       sorter: (a: Candidate, b: Candidate) => a.phone.localeCompare(b.phone),
       render: (v: string) => (
         <Space>
@@ -339,13 +339,13 @@ export default function InterviewerDashboard() {
               onClick: () => setOpenId(record.id),
               style: { cursor: "pointer" },
             })}
-            /** keep columns from squeezing & make ellipsis work */
             tableLayout="fixed"
             scroll={{ x: 1100 }}
           />
         )}
       </Card>
 
+      {/* Detail Drawer */}
       <Drawer
         width={720}
         title={
