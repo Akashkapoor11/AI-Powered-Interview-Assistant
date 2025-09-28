@@ -27,6 +27,8 @@ Built with:
 ✅ Login, Logout & Reset session support  
 ✅ Fully responsive & Vercel-deployable  
 
+## Vedio 
+<!-- Failed to upload "AI Interview Assistant - Google Chrome 2025-09-28 15-53-09.mp4" -->
 ---
 ## Deployment Link
 https://ai-powered-interview-assistant-czj7-5cpqsghpl.vercel.app/
