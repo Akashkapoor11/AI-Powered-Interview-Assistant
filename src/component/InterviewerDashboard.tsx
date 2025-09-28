@@ -1,3 +1,4 @@
+// src/component/InterviewerDashboard.tsx
 import React, { useMemo, useState } from "react";
 import {
   Button,
@@ -27,10 +28,13 @@ import {
 } from "@ant-design/icons";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../store/store";
+
+// Redux actions
 import { addCandidate, removeCandidate } from "../store/slices/candidatesSlice";
 
 const { Title, Text } = Typography;
 
+/* ---------------- Types ------------------ */
 type AnswerRow = {
   q: { id: string; text: string; difficulty: "EASY" | "MEDIUM" | "HARD"; seconds: number };
   answer: string;
@@ -46,26 +50,24 @@ type Candidate = {
   email: string;
   phone: string;
   finalScore: number;
-  summary: string;          // make this required to satisfy slice types on Vercel
+  summary: string;          // always string (no undefined)
   createdAt: number;
-  answers?: AnswerRow[];
+  answers: AnswerRow[];     // keep AnswerRow[]
 };
 
-function truncate(s: string | undefined, n = 80) {
+/* -------------- Helpers ------------------ */
+function truncate(s: string, n = 80) {
   if (!s) return "";
   return s.length > n ? s.slice(0, n) + "…" : s;
 }
 
+/* -------------- Component ---------------- */
 export default function InterviewerDashboard() {
   const dispatch = useDispatch();
 
-  // Current session (not yet saved)
+  // Current session
   const session = useSelector((s: RootState) => s.session);
-  const { profile, finalScore = 0, summary, answers = [] } = session as any;
-
-  // Live score before DONE
-  const liveScore = (answers as AnswerRow[]).reduce((s, a) => s + (a?.score || 0), 0);
-  const shownScore = finalScore > 0 ? finalScore : liveScore;
+  const { profile, finalScore = 0, summary = "—", answers = [] } = session as any;
 
   // Persisted candidates list
   const candidates = useSelector((s: RootState) => (s as any).candidates?.list || []) as Candidate[];
@@ -83,12 +85,11 @@ export default function InterviewerDashboard() {
       name: profile.name,
       email: profile.email,
       phone: profile.phone,
-      finalScore: shownScore,           // save the visible score
-      summary: summary || "—",          // always a string
+      finalScore,
+      summary,
       answers: answers as AnswerRow[],
       createdAt: Date.now(),
     };
-    // if your slice enforces a stricter type, you can cast: dispatch(addCandidate(payload as any));
     dispatch(addCandidate(payload));
     message.success("Candidate saved to dashboard.");
   };
@@ -112,54 +113,46 @@ export default function InterviewerDashboard() {
       .sort((a, b) => b.createdAt - a.createdAt);
   }, [candidates, query]);
 
+  /* -------- Table Columns ---------- */
   const columns = [
     {
       title: "Name",
       dataIndex: "name",
-      width: 180,
       sorter: (a: Candidate, b: Candidate) => a.name.localeCompare(b.name),
       render: (v: string) => (
         <Space>
           <UserOutlined />
-          <Text strong ellipsis={{ tooltip: v }} style={{ maxWidth: 120, display: "inline-block" }}>
-            {v}
-          </Text>
+          <Text strong>{v}</Text>
         </Space>
       ),
     },
     {
       title: "Email",
       dataIndex: "email",
-      width: 300,
       sorter: (a: Candidate, b: Candidate) => a.email.localeCompare(b.email),
       render: (v: string) => (
         <Space>
           <MailOutlined />
-          <a href={`mailto:${v}`} style={{ maxWidth: 240, display: "inline-block" }}>
-            <Text ellipsis={{ tooltip: v }}>{v}</Text>
-          </a>
+          <a href={`mailto:${v}`}>{v}</a>
         </Space>
       ),
     },
     {
       title: "Phone",
       dataIndex: "phone",
-      width: 180,
       sorter: (a: Candidate, b: Candidate) => a.phone.localeCompare(b.phone),
       render: (v: string) => (
         <Space>
           <PhoneOutlined />
-          <a href={`tel:${v}`} style={{ maxWidth: 120, display: "inline-block" }}>
-            <Text ellipsis={{ tooltip: v }}>{v}</Text>
-          </a>
+          <a href={`tel:${v}`}>{v}</a>
         </Space>
       ),
     },
     {
       title: "Final Score",
       dataIndex: "finalScore",
-      width: 140,
       sorter: (a: Candidate, b: Candidate) => a.finalScore - b.finalScore,
+      width: 140,
       render: (v: number) => (
         <Space>
           <Progress
@@ -228,6 +221,7 @@ export default function InterviewerDashboard() {
     },
   ];
 
+  /* -------- Current Candidate Card ---------- */
   const currentCard = (
     <Card
       style={{
@@ -241,17 +235,17 @@ export default function InterviewerDashboard() {
         <Space align="start">
           <Progress
             type="dashboard"
-            percent={Math.min(100, Math.round(((shownScore || 0) / 60) * 100))}
-            format={() => shownScore || 0}
+            percent={Math.min(100, Math.round(((finalScore || 0) / 60) * 100))}
+            format={() => finalScore || 0}
             width={108}
             strokeColor={{ "0%": "#34d399", "100%": "#2563eb" }}
           />
           <div>
-            <Title level={5} style={{ margin: 0, color: "rgba(15,23,42,0.95)" }}>
+            <Title level={5} style={{ margin: 0 }}>
               Current Candidate
             </Title>
-            <Text type="secondary" style={{ color: "rgba(15,23,42,0.75)" }}>
-              Final Score: <Text strong style={{ color: "rgba(15,23,42,0.95)" }}>{shownScore || 0}</Text> — Click “Save to Dashboard”.
+            <Text type="secondary">
+              Final Score: <Text strong>{finalScore || 0}</Text> — Click “Save to Dashboard”.
             </Text>
             <div style={{ marginTop: 8 }}>
               <Space wrap>
@@ -291,6 +285,7 @@ export default function InterviewerDashboard() {
     [filtered, openId]
   );
 
+  /* -------- Render ---------- */
   return (
     <div style={{ padding: 16 }}>
       {currentCard}
@@ -339,8 +334,6 @@ export default function InterviewerDashboard() {
               onClick: () => setOpenId(record.id),
               style: { cursor: "pointer" },
             })}
-            tableLayout="fixed"
-            scroll={{ x: 1100 }}
           />
         )}
       </Card>
@@ -405,12 +398,7 @@ export default function InterviewerDashboard() {
                   : verdict === "incorrect"
                   ? "red"
                   : "gold";
-              const max =
-                row.q.difficulty === "EASY"
-                  ? 5
-                  : row.q.difficulty === "MEDIUM"
-                  ? 10
-                  : 15;
+              const max = row.q.difficulty === "EASY" ? 5 : row.q.difficulty === "MEDIUM" ? 10 : 15;
 
               return (
                 <Card
