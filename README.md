@@ -32,7 +32,7 @@ Built with:
 https://www.youtube.com/watch?v=wCw1FnhwSeY
 
 ## Deployment Link
-https://ai-powered-interview-assistant-czj7-5cpqsghpl.vercel.app/
+https://ai-powered-interview-assistant-a65y.vercel.app/
 
 ## 🛠️ Getting Started
 
