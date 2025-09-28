@@ -28,13 +28,10 @@ import {
 } from "@ant-design/icons";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../store/store";
-
-// Redux actions
 import { addCandidate, removeCandidate } from "../store/slices/candidatesSlice";
 
 const { Title, Text } = Typography;
 
-/* ---------------- Types ------------------ */
 type AnswerRow = {
   q: { id: string; text: string; difficulty: "EASY" | "MEDIUM" | "HARD"; seconds: number };
   answer: string;
@@ -44,33 +41,40 @@ type AnswerRow = {
   timeTaken?: number;
 };
 
-type Candidate = {
+// Shape your candidates slice expects (structural typing)
+type CandidateRow = {
   id: string;
   name: string;
   email: string;
   phone: string;
   finalScore: number;
-  summary: string;          // always string (no undefined)
+  summary: string;
   createdAt: number;
-  answers: AnswerRow[];     // keep AnswerRow[]
+  answers?: {
+    qid: string;
+    question: string;
+    difficulty: "EASY" | "MEDIUM" | "HARD";
+    score: number;
+    answer: string;
+  }[];
 };
 
-/* -------------- Helpers ------------------ */
-function truncate(s: string, n = 80) {
+function truncate(s: string | undefined, n = 80) {
   if (!s) return "";
   return s.length > n ? s.slice(0, n) + "…" : s;
 }
 
-/* -------------- Component ---------------- */
 export default function InterviewerDashboard() {
   const dispatch = useDispatch();
 
-  // Current session
-  const session = useSelector((s: RootState) => s.session);
-  const { profile, finalScore = 0, summary = "—", answers = [] } = session as any;
+  // Current session (not yet saved)
+  const session = useSelector((s: RootState) => s.session) as any;
+  const { profile, finalScore = 0, summary, answers = [] } = session;
 
   // Persisted candidates list
-  const candidates = useSelector((s: RootState) => (s as any).candidates?.list || []) as Candidate[];
+  const candidates = useSelector(
+    (s: RootState) => (s as any).candidates?.list || []
+  ) as CandidateRow[];
 
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -80,16 +84,29 @@ export default function InterviewerDashboard() {
       message.warning("Please complete candidate profile on the Interviewee tab first.");
       return;
     }
-    const payload: Candidate = {
+
+    // Map AnswerRow[] -> slice’s expected shape
+    const mappedAnswers: CandidateRow["answers"] = (answers as AnswerRow[]).map(
+      (r) => ({
+        qid: r.q.id,
+        question: r.q.text,
+        difficulty: r.q.difficulty,
+        score: r.score,
+        answer: r.answer,
+      })
+    );
+
+    const payload: CandidateRow = {
       id: `${Date.now()}`,
       name: profile.name,
       email: profile.email,
       phone: profile.phone,
       finalScore,
-      summary,
-      answers: answers as AnswerRow[],
+      summary: summary || "—",
       createdAt: Date.now(),
+      answers: mappedAnswers,
     };
+
     dispatch(addCandidate(payload));
     message.success("Candidate saved to dashboard.");
   };
@@ -113,12 +130,11 @@ export default function InterviewerDashboard() {
       .sort((a, b) => b.createdAt - a.createdAt);
   }, [candidates, query]);
 
-  /* -------- Table Columns ---------- */
   const columns = [
     {
       title: "Name",
       dataIndex: "name",
-      sorter: (a: Candidate, b: Candidate) => a.name.localeCompare(b.name),
+      sorter: (a: CandidateRow, b: CandidateRow) => a.name.localeCompare(b.name),
       render: (v: string) => (
         <Space>
           <UserOutlined />
@@ -129,7 +145,7 @@ export default function InterviewerDashboard() {
     {
       title: "Email",
       dataIndex: "email",
-      sorter: (a: Candidate, b: Candidate) => a.email.localeCompare(b.email),
+      sorter: (a: CandidateRow, b: CandidateRow) => a.email.localeCompare(b.email),
       render: (v: string) => (
         <Space>
           <MailOutlined />
@@ -140,7 +156,7 @@ export default function InterviewerDashboard() {
     {
       title: "Phone",
       dataIndex: "phone",
-      sorter: (a: Candidate, b: Candidate) => a.phone.localeCompare(b.phone),
+      sorter: (a: CandidateRow, b: CandidateRow) => a.phone.localeCompare(b.phone),
       render: (v: string) => (
         <Space>
           <PhoneOutlined />
@@ -151,7 +167,7 @@ export default function InterviewerDashboard() {
     {
       title: "Final Score",
       dataIndex: "finalScore",
-      sorter: (a: Candidate, b: Candidate) => a.finalScore - b.finalScore,
+      sorter: (a: CandidateRow, b: CandidateRow) => a.finalScore - b.finalScore,
       width: 140,
       render: (v: number) => (
         <Space>
@@ -178,7 +194,7 @@ export default function InterviewerDashboard() {
       title: "",
       key: "actions",
       width: 200,
-      render: (_: any, record: Candidate) => (
+      render: (_: any, record: CandidateRow) => (
         <Space>
           <Tooltip title="View details">
             <Button
@@ -221,7 +237,6 @@ export default function InterviewerDashboard() {
     },
   ];
 
-  /* -------- Current Candidate Card ---------- */
   const currentCard = (
     <Card
       style={{
@@ -285,7 +300,6 @@ export default function InterviewerDashboard() {
     [filtered, openId]
   );
 
-  /* -------- Render ---------- */
   return (
     <div style={{ padding: 16 }}>
       {currentCard}
@@ -325,7 +339,7 @@ export default function InterviewerDashboard() {
             }
           />
         ) : (
-          <Table<Candidate>
+          <Table<CandidateRow>
             rowKey="id"
             columns={columns as any}
             dataSource={filtered}
@@ -386,64 +400,41 @@ export default function InterviewerDashboard() {
             </Card>
 
             <Title level={5}>Per-question breakdown</Title>
-            {(selected.answers || []).map((row, i) => {
-              const verdict = (row.verdict || "partial") as
-                | "correct"
-                | "partially_correct"
-                | "incorrect"
-                | "partial";
-              const color =
-                verdict === "correct"
-                  ? "green"
-                  : verdict === "incorrect"
-                  ? "red"
-                  : "gold";
-              const max = row.q.difficulty === "EASY" ? 5 : row.q.difficulty === "MEDIUM" ? 10 : 15;
-
-              return (
-                <Card
-                  key={row.q.id || i}
-                  size="small"
-                  style={{ marginBottom: 12 }}
-                  title={
-                    <Space>
-                      <Tag color={row.q.difficulty === "EASY" ? "blue" : row.q.difficulty === "MEDIUM" ? "purple" : "magenta"}>
-                        {row.q.difficulty}
-                      </Tag>
-                      <Text strong>
-                        Q{i + 1}. {row.q.text}
-                      </Text>
-                    </Space>
-                  }
-                  extra={
-                    <Space>
-                      <Tag color={color} style={{ textTransform: "uppercase" }}>
-                        {verdict.replace("_", " ")}
-                      </Tag>
-                      <Tag>
-                        Score: <b>{row.score}</b> / {max}
-                      </Tag>
-                      {typeof row.timeTaken === "number" && <Tag>Time: {row.timeTaken}s</Tag>}
-                    </Space>
-                  }
-                >
-                  <div style={{ marginBottom: 6 }}>
-                    <Text type="secondary">Answer</Text>
-                    <Card style={{ marginTop: 6 }} size="small">
-                      <Text>{row.answer || "—"}</Text>
-                    </Card>
-                  </div>
-                  {row.feedback && (
-                    <div>
-                      <Text type="secondary">AI feedback</Text>
-                      <Card style={{ marginTop: 6 }} size="small">
-                        <Text>{row.feedback}</Text>
-                      </Card>
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
+            {(selected.answers || []).map((row, i) => (
+              <Card
+                key={row.qid || i}
+                size="small"
+                style={{ marginBottom: 12 }}
+                title={
+                  <Space>
+                    <Tag color={
+                      row.difficulty === "EASY"
+                        ? "blue"
+                        : row.difficulty === "MEDIUM"
+                        ? "purple"
+                        : "magenta"
+                    }>
+                      {row.difficulty}
+                    </Tag>
+                    <Text strong>
+                      Q{i + 1}. {row.question}
+                    </Text>
+                  </Space>
+                }
+                extra={
+                  <Space>
+                    <Tag>Score: <b>{row.score}</b></Tag>
+                  </Space>
+                }
+              >
+                <div>
+                  <Text type="secondary">Answer</Text>
+                  <Card style={{ marginTop: 6 }} size="small">
+                    <Text>{row.answer || "—"}</Text>
+                  </Card>
+                </div>
+              </Card>
+            ))}
           </>
         )}
       </Drawer>
